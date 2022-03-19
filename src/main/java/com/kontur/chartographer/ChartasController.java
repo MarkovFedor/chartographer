@@ -2,68 +2,81 @@ package com.kontur.chartographer;
 
 import com.kontur.chartographer.exceptions.IncorrectChartParamsException;
 import com.kontur.chartographer.exceptions.NotFoundByIdException;
-import com.kontur.chartographer.service.ChartasService;
+import com.kontur.chartographer.service.FileSystemStorageService;
+import org.apache.commons.io.IOUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
-import java.awt.image.BufferedImage;
+import javax.annotation.Resource;
+import javax.imageio.plugins.bmp.BMPImageWriteParam;
+import javax.servlet.ServletContext;
+import javax.websocket.server.PathParam;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.UUID;
 
-@RestController
-@RequestMapping("/chartas")
+@Controller
 public class ChartasController {
-    private final ChartasService service;
+    private final FileSystemStorageService storageService;
 
     @Autowired
-    public ChartasController(ChartasService service) {
-        this.service = service;
+    public ChartasController(FileSystemStorageService storageService, ServletContext context) {
+        this.storageService = storageService;
     }
 
-    @PostMapping("/?width={width}&height={height")
-    public ResponseEntity createChartas(
-            @PathVariable("width") int width,
-            @PathVariable("height") int height
-    ) {
+    @PostMapping("/")
+    public ResponseEntity createNewChart(
+            @RequestParam("width") int width,
+            @RequestParam("height") int height) {
+        UUID id = null;
         try {
-            UUID id = service.create(width, height);
+            id = storageService.create(width, height);
             return new ResponseEntity(id, HttpStatus.CREATED);
+        } catch (IncorrectChartParamsException e) {
+            return new ResponseEntity(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity getFullChart(
+            @PathVariable String id) throws IOException {
+        char[] image = new char[0];
+        try {
+            image = storageService.loadFullImage(id);
+            ResponseEntity<char[]> entity = new ResponseEntity(image, HttpStatus.OK);
+            return entity;
+        } catch (NotFoundByIdException e) {
+            return new ResponseEntity(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @GetMapping(value = "/{id}/")
+    public ResponseEntity getPartOfChart(
+            @PathVariable String id,
+            @RequestParam("x") int x,
+            @RequestParam("y") int y,
+            @RequestParam("width") int width,
+            @RequestParam("height") int height) {
+        try {
+            byte[] image = storageService.loadPartOfImage(id, x, y, width, height);
+            return new ResponseEntity(image, HttpStatus.OK);
+        } catch (NotFoundByIdException e) {
+            return new ResponseEntity(HttpStatus.NOT_FOUND);
         } catch(IncorrectChartParamsException e) {
             return new ResponseEntity(HttpStatus.BAD_REQUEST);
         }
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity deleteChart(@PathVariable("id") UUID id) {
-        try {
-            service.removeChart(id);
-            return new ResponseEntity(HttpStatus.OK);
-        } catch (NotFoundByIdException e) {
-            return new ResponseEntity(HttpStatus.NOT_FOUND);
-        }
+    public ResponseEntity deleteChart(@PathVariable String id) {
+        storageService.delete(id);
+        return new ResponseEntity(HttpStatus.OK);
     }
-
-    @GetMapping("/{id}/?x={x}&y={y}&width={width}&height={height}")
-    public ResponseEntity getPartOfChart(
-            @PathVariable("id") UUID id,
-            @PathVariable("x") int x,
-            @PathVariable("y") int y,
-            @PathVariable("width") int width,
-            @PathVariable("height") int height
-    )  {
-        try {
-            BufferedImage image = service.getPartOfImage(id, x,y,width,height);
-            return new ResponseEntity(image, HttpStatus.CREATED);
-        } catch (IncorrectChartParamsException e) {
-            return new ResponseEntity(HttpStatus.BAD_REQUEST);
-        } catch(NotFoundByIdException e) {
-            return new ResponseEntity(HttpStatus.NOT_FOUND);
-        } catch (IOException e) {
-            return new ResponseEntity(HttpStatus.OK);
-        }
-    }
-
-
 }
