@@ -2,24 +2,26 @@ package com.kontur.chartographer.service;
 
 import com.kontur.chartographer.exceptions.IncorrectChartParamsException;
 import com.kontur.chartographer.exceptions.NotFoundByIdException;
-import com.kontur.chartographer.exceptions.StorageFileNotFoundException;
+import com.kontur.chartographer.imageUtils.ConcatImages;
 import com.kontur.chartographer.storage.StorageProperties;
 import org.apache.commons.io.IOUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.awt.image.RenderedImage;
 import java.io.*;
-import java.net.MalformedURLException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Iterator;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -53,21 +55,31 @@ public class FileSystemStorageService implements StorageService{
         }
     }
 
-    public UUID create(int width, int height) throws IncorrectChartParamsException {
+    public UUID create(int width, int height) throws IncorrectChartParamsException, IOException {
         if(width > 20000 || width < 0 || height > 50000 || height < 0) {
             throw new IncorrectChartParamsException("Неверные параметры изображенния");
         }
-        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
-
         UUID id = UUID.randomUUID();
         File file = new File(rootLocation.resolve(id.toString() + ".bmp").toString());
-        try {
-            ImageIO.write(image, "BMP", file);
-            return id;
-        } catch(IOException e) {
-            e.printStackTrace();
-            return null;
+        File templateFile = new File(rootLocation.resolve("template.bmp").toString());
+        BufferedImage image = new BufferedImage(width, 1, BufferedImage.TYPE_3BYTE_BGR);
+        for(int i = 0; i < width; i++) {
+            image.setRGB(i, 0, Color.BLACK.getRGB());
         }
+        ImageIO.write(image, "BMP", templateFile);
+        ImageIO.write(image, "BMP", file);
+        String[] st = new String[2];
+        st[0] = "D:/TestFolder/template.bmp";
+        st[1] = file.getPath();
+        try {
+            for(int i = 0; i < height - 1; i++) {
+                ConcatImages.concatBMPFiles(st,file.getPath());
+            }
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+        templateFile.delete();
+        return id;
     }
 
     @Override
@@ -106,7 +118,7 @@ public class FileSystemStorageService implements StorageService{
         return loadAsBase64(file);
     }
 
-    public byte[] loadPartOfImage(String id, int x, int y, int width, int height) throws NotFoundByIdException, IncorrectChartParamsException {
+    public char[] loadPartOfImage(String id, int x, int y, int width, int height) throws NotFoundByIdException, IncorrectChartParamsException {
         if(x < 0 || y<0|| x>20000||y>50000||width<0||width>5000||height<0||height>5000) {
             throw new IncorrectChartParamsException("Неверные параметры изображения");
         }
@@ -121,10 +133,42 @@ public class FileSystemStorageService implements StorageService{
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(partImage, "BMP", baos);
             byte[] bytes = baos.toByteArray();
-            return bytes;
+            char[] base64Image = Base64Coder.encode(bytes);
+            return base64Image;
         } catch (IOException e) {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    public void restoreImage(String id, int x, int y, int width, int height, MultipartFile file) throws NotFoundByIdException {
+        BufferedImage image = null;
+        try {
+            image = ImageIO.read(file.getInputStream());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        File restoringImageFile = new File(getPath(id));
+        if(!restoringImageFile.exists()) {
+            throw new NotFoundByIdException("Не найдено");
+        }
+        BufferedImage restoringImage = null;
+        try {
+            restoringImage = ImageIO.read(file.getInputStream());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        int w = Math.max(image.getWidth(), restoringImage.getWidth());
+        int h = Math.max(image.getHeight(), restoringImage.getHeight());
+        BufferedImage combined = new BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR);
+        Graphics g = combined.getGraphics();
+        g.drawImage(image,0,0,null);
+        g.drawImage(restoringImage, x, y, null);
+        g.dispose();
+        try {
+            ImageIO.write(combined, "BMP", restoringImageFile);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 

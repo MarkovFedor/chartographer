@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
 import javax.annotation.Resource;
@@ -41,6 +42,9 @@ public class ChartasController {
             return new ResponseEntity(id, HttpStatus.CREATED);
         } catch (IncorrectChartParamsException e) {
             return new ResponseEntity(HttpStatus.BAD_REQUEST);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
         }
     }
 
@@ -64,13 +68,31 @@ public class ChartasController {
             @RequestParam("y") int y,
             @RequestParam("width") int width,
             @RequestParam("height") int height) {
+        char[] image = new char[0];
         try {
-            byte[] image = storageService.loadPartOfImage(id, x, y, width, height);
+            image = storageService.loadPartOfImage(id, x, y, width, height);
             return new ResponseEntity(image, HttpStatus.OK);
         } catch (NotFoundByIdException e) {
             return new ResponseEntity(HttpStatus.NOT_FOUND);
         } catch(IncorrectChartParamsException e) {
             return new ResponseEntity(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @PostMapping("/{id}/")
+    public ResponseEntity restoreImage(
+            @PathVariable String id,
+            @PathParam("x") int x,
+            @PathParam("y") int y,
+            @PathParam("width") int width,
+            @PathParam("height") int height,
+            @RequestParam("file") MultipartFile file
+    ) {
+        try {
+            storageService.restoreImage(id, x, y, width, height, file);
+            return new ResponseEntity(HttpStatus.CREATED);
+        } catch (NotFoundByIdException e) {
+            return new ResponseEntity(HttpStatus.NOT_FOUND);
         }
     }
 
