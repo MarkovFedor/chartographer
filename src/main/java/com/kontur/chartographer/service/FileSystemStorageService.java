@@ -158,15 +158,11 @@ public class FileSystemStorageService implements StorageService{
         } catch (IOException e) {
             e.printStackTrace();
         }
-        int w = Math.max(image.getWidth(), restoringImage.getWidth());
-        int h = Math.max(image.getHeight(), restoringImage.getHeight());
-        BufferedImage combined = new BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR);
-        Graphics g = combined.getGraphics();
-        g.drawImage(image,0,0,null);
-        g.drawImage(restoringImage, x, y, null);
+        Graphics g = restoringImage.getGraphics();
+        g.drawImage(image,x,y,null);
         g.dispose();
         try {
-            ImageIO.write(combined, "BMP", restoringImageFile);
+            ImageIO.write(restoringImage, "BMP", restoringImageFile);
         } catch (IOException e) {
             e.printStackTrace();
         }

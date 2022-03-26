@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("storage")
 public class StorageProperties {
-    private String location = "D:/TestFolder";
+    private String location = "/path/to/content/folder";
 
     public String getLocation() {
         return location;
